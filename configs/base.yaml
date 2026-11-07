@@ -1,0 +1,36 @@
+# Base experiment config. Copy and override per run.
+seed: 1234
+device: mps            # falls back to cpu if MPS unavailable
+
+teacher: EleutherAI/pythia-410m
+student: EleutherAI/pythia-70m
+
+corpus:
+  name: HuggingFaceFW/fineweb    # ODC-By (Common Crawl derived; attribution required)
+  subset: sample-10BT
+  token_budget: 10_000_000       # recommended range: 5–20M
+  seq_len: 512
+
+topk: 32                         # recommended range: 20–50
+
+distill:
+  target: plain
+  temperature: 1.0
+  lr: 1.0e-4
+  batch_size: 8
+  grad_accum: 4
+  epochs: 1
+  hard_label_weight: 0.0         # λ for optional hard-label CE term
+  dtype: bfloat16
+  checkpoint_every: 500          # steps
+
+loop:
+  rounds: 3                      # recommended range: 3–5
+  min_improvement: 0.05
+  max_capability_drop: 0.05
+
+eval:
+  split: dev
+  perplexity_tokens: 200_000
+  lambada_n: 500
+  hellaswag_n: 500
