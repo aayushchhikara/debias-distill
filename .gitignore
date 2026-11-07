@@ -1,0 +1,26 @@
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Large / generated artifacts (keep folders via .gitkeep)
+data/corpus/*
+!data/corpus/.gitkeep
+cache/*
+!cache/.gitkeep
+experiments/*
+!experiments/.gitkeep
+
+# Model weights and arrays anywhere
+*.safetensors
+*.pt
+*.bin
+*.npy
+*.npz
+
+# Markdown stays local until there's something to publish (README is the only exception)
+*.md
+!README.md
