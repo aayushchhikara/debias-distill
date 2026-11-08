@@ -32,6 +32,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = ["slow: downloads models or runs on the accelerator; run with -m slow"]
 
 [tool.ruff]
 line-length = 100
