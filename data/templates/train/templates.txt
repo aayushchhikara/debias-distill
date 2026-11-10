@@ -1,0 +1,108 @@
+{subj} worked as
+Last year, {subj} worked as
+After college, {subj} worked as
+In the end, {subj} worked as
+Since 2015, {subj} worked as
+After moving to the city, {subj} worked as
+{subj} was hired as
+Last year, {subj} was hired as
+After college, {subj} was hired as
+In the end, {subj} was hired as
+Since 2015, {subj} was hired as
+After moving to the city, {subj} was hired as
+{subj} got a job as
+Last year, {subj} got a job as
+After college, {subj} got a job as
+In the end, {subj} got a job as
+Since 2015, {subj} got a job as
+After moving to the city, {subj} got a job as
+{subj} trained to be
+Last year, {subj} trained to be
+After college, {subj} trained to be
+In the end, {subj} trained to be
+Since 2015, {subj} trained to be
+After moving to the city, {subj} trained to be
+{subj} has a career as
+Last year, {subj} has a career as
+After college, {subj} has a career as
+In the end, {subj} has a career as
+Since 2015, {subj} has a career as
+After moving to the city, {subj} has a career as
+{subj} is employed as
+Last year, {subj} is employed as
+After college, {subj} is employed as
+In the end, {subj} is employed as
+Since 2015, {subj} is employed as
+After moving to the city, {subj} is employed as
+{poss} first job was as
+Last year, {poss} first job was as
+After college, {poss} first job was as
+In the end, {poss} first job was as
+Since 2015, {poss} first job was as
+After moving to the city, {poss} first job was as
+{subj} applied to work as
+Last year, {subj} applied to work as
+After college, {subj} applied to work as
+In the end, {subj} applied to work as
+Since 2015, {subj} applied to work as
+After moving to the city, {subj} applied to work as
+{subj} earns a living as
+Last year, {subj} earns a living as
+After college, {subj} earns a living as
+In the end, {subj} earns a living as
+Since 2015, {subj} earns a living as
+After moving to the city, {subj} earns a living as
+{subj} spent ten years as
+Last year, {subj} spent ten years as
+After college, {subj} spent ten years as
+In the end, {subj} spent ten years as
+Since 2015, {subj} spent ten years as
+After moving to the city, {subj} spent ten years as
+{subj} dreamed of becoming
+Last year, {subj} dreamed of becoming
+After college, {subj} dreamed of becoming
+In the end, {subj} dreamed of becoming
+Since 2015, {subj} dreamed of becoming
+After moving to the city, {subj} dreamed of becoming
+{subj} works full-time as
+Last year, {subj} works full-time as
+After college, {subj} works full-time as
+In the end, {subj} works full-time as
+Since 2015, {subj} works full-time as
+After moving to the city, {subj} works full-time as
+{subj} recently started working as
+Last year, {subj} recently started working as
+After college, {subj} recently started working as
+In the end, {subj} recently started working as
+Since 2015, {subj} recently started working as
+After moving to the city, {subj} recently started working as
+{subj} volunteered as
+Last year, {subj} volunteered as
+After college, {subj} volunteered as
+In the end, {subj} volunteered as
+Since 2015, {subj} volunteered as
+After moving to the city, {subj} volunteered as
+{subj} studied hard to become
+Last year, {subj} studied hard to become
+After college, {subj} studied hard to become
+In the end, {subj} studied hard to become
+Since 2015, {subj} studied hard to become
+After moving to the city, {subj} studied hard to become
+{subj} was offered a position as
+Last year, {subj} was offered a position as
+After college, {subj} was offered a position as
+In the end, {subj} was offered a position as
+Since 2015, {subj} was offered a position as
+After moving to the city, {subj} was offered a position as
+{subj} retired after decades as
+Last year, {subj} retired after decades as
+After college, {subj} retired after decades as
+In the end, {subj} retired after decades as
+Since 2015, {subj} retired after decades as
+After moving to the city, {subj} retired after decades as
+{subj} joined the company as
+Last year, {subj} joined the company as
+After college, {subj} joined the company as
+In the end, {subj} joined the company as
+Since 2015, {subj} joined the company as
+After moving to the city, {subj} joined the company as

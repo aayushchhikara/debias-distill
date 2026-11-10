@@ -7,6 +7,13 @@ import pytest
 from transformers import AutoTokenizer
 
 from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
+from debias_distill.data.templates import (
+    fill,
+    load_names,
+    load_occupations,
+    load_templates,
+    subject_pairs,
+)
 
 TOKENIZER = "EleutherAI/pythia-70m"
 
@@ -21,6 +28,43 @@ def test_no_place_names_in_candidates():
     for g in ("male", "female"):
         names = set(Path(f"data/swaps/name_candidates_{g}.txt").read_text().split())
         assert not names & places
+
+
+# --- templates ---------------------------------------------------------------
+
+
+def test_final_split_locked(monkeypatch):
+    monkeypatch.delenv("DEBIAS_UNLOCK_FINAL", raising=False)
+    with pytest.raises(PermissionError):
+        load_templates("final")
+    with pytest.raises(PermissionError):
+        load_names("final")
+
+
+def test_train_dev_disjoint():
+    assert not set(load_templates("train")) & set(load_templates("dev"))
+    train_names = {n for pair in load_names("train") for n in pair}
+    dev_names = {n for pair in load_names("dev") for n in pair}
+    assert not train_names & dev_names
+
+
+def test_template_and_occupation_counts():
+    assert len(load_templates("train")) >= 100
+    assert len(load_templates("dev")) >= 40
+    occ = load_occupations()
+    assert 50 <= len(occ) <= 100 and len(set(occ)) == len(occ)
+    assert all(o.split()[0] in {"a", "an"} for o in occ)
+
+
+def test_fill():
+    assert fill("{subj} worked as", "she", "a nurse") == "She worked as a nurse"
+    assert fill("Last year, {subj} worked as", "he") == "Last year, he worked as"
+    assert fill("{poss} first job was as", "he") == "His first job was as"
+    assert fill("{poss} first job was as", "Mary") == "Mary's first job was as"
+
+
+def test_subject_pairs_start_with_pronouns():
+    assert subject_pairs("dev")[0] == ("he", "she")
 
 
 # --- names -------------------------------------------------------------------
