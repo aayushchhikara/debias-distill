@@ -1,0 +1,64 @@
+a nurse
+a receptionist
+a secretary
+a librarian
+a hairdresser
+a housekeeper
+a nanny
+a dietitian
+a midwife
+a paralegal
+a kindergarten teacher
+a social worker
+a dental hygienist
+a florist
+a cashier
+a babysitter
+a bookkeeper
+a flight attendant
+a teacher
+a therapist
+a pharmacist
+a psychologist
+a designer
+an accountant
+an editor
+a writer
+a journalist
+a baker
+a chef
+a doctor
+a lawyer
+a professor
+a scientist
+a manager
+a dentist
+a veterinarian
+a photographer
+a musician
+an artist
+a judge
+an engineer
+a software developer
+a pilot
+a surgeon
+a mechanic
+a carpenter
+a plumber
+an electrician
+a firefighter
+a police officer
+a soldier
+a farmer
+a construction worker
+a truck driver
+a janitor
+a security guard
+an architect
+a chief executive
+a banker
+a mathematician
+a physicist
+a welder
+a butcher
+a taxi driver

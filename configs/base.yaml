@@ -2,12 +2,18 @@
 seed: 1234
 device: mps            # falls back to cpu if MPS unavailable
 
+data:
+  swaps_dir: data/swaps
+  templates_dir: data/templates
+  corpus_dir: data/corpus
+
 teacher: EleutherAI/pythia-410m
 student: EleutherAI/pythia-70m
 
 corpus:
   name: HuggingFaceFW/fineweb    # ODC-By (Common Crawl derived; attribution required)
-  subset: sample-10BT
+  revision: 9bb295ddab0e05d785b879661af7260fed5140fc
+  data_dir: sample/10BT
   token_budget: 10_000_000       # recommended range: 5–20M
   seq_len: 512
 

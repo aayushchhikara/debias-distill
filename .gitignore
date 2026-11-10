@@ -13,6 +13,9 @@ cache/*
 !cache/.gitkeep
 experiments/*
 !experiments/.gitkeep
+# Held-out evaluation split stays local
+data/templates/final/*
+!data/templates/final/.gitkeep
 
 # Model weights and arrays anywhere
 *.safetensors

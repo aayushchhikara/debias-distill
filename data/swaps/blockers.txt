@@ -1,0 +1,11 @@
+# Sequences containing any of these words get no substituted variant.
+pregnant pregnancy pregnancies
+breastfeeding breastfeed breastfed lactation lactating
+menstrual menstruation menopause menopausal
+ovary ovaries ovarian ovulation uterus uterine womb
+cervix
+prostate testicle testicles testicular
+miscarriage miscarriages postpartum
+gynecologist gynecological gynaecologist gynaecological
+obstetric obstetrics obstetrician
+hysterectomy vasectomy mammogram mammography
