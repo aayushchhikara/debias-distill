@@ -1,5 +1,6 @@
 """Tests for substitution lists, templates and corpus preprocessing."""
 
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import numpy as np
 import pytest
 from transformers import AutoTokenizer
 
+from debias_distill.data.corpus import build_counterfactuals, sample_corpus
 from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
 from debias_distill.data.swaps import TokenSwapper, build_table, counterfactual, load_swap_pairs
 from debias_distill.data.templates import (
@@ -16,6 +18,7 @@ from debias_distill.data.templates import (
     load_templates,
     subject_pairs,
 )
+from debias_distill.utils.config import load_config
 
 TOKENIZER = "EleutherAI/pythia-70m"
 
@@ -214,6 +217,55 @@ def test_fill():
 
 def test_subject_pairs_start_with_pronouns():
     assert subject_pairs("dev")[0] == ("he", "she")
+
+
+# --- corpus pipeline (synthetic documents, no network) -----------------------
+
+
+def test_corpus_pipeline(tmp_path):
+    cfg = load_config(
+        "configs/base.yaml",
+        overrides={
+            "corpus": {"seq_len": 32, "token_budget": 32 * 20},
+            "eval": {"perplexity_tokens": 64},
+        },
+    )
+    docs = [
+        "He went to the market and bought apples for his mother.",
+        "The weather report predicted rain for the whole week ahead of us.",
+        "She told her brother that the train would be late again tonight.",
+    ] * 30
+    meta = sample_corpus(cfg, tmp_path, docs=docs)
+    assert meta["heldout"]["rows"] == 2 and meta["train"]["rows"] == 20
+
+    stats = build_counterfactuals(cfg, tmp_path)
+    sampled = np.load(tmp_path / "sampled_tokens.npy")
+    train = np.load(tmp_path / "train_tokens.npy")
+    rejected = np.load(tmp_path / "rejected_tokens.npy")
+    assert len(train) + len(rejected) == len(sampled) == stats["sequences"]
+    assert stats["train_rows"] == len(train) and stats["rejected_rows"] == len(rejected)
+    cf = np.load(tmp_path / "cf_tokens.npy")
+    idx = np.load(tmp_path / "cf_index.npy")
+    assert cf.shape[1] == train.shape[1] and len(cf) == len(idx) == stats["produced"] > 0
+    assert all((cf[k] != train[i]).any() for k, i in enumerate(idx))
+    assert json.loads((tmp_path / "cf_stats.json").read_text())["produced"] == stats["produced"]
+
+
+def test_rejected_rows_excluded_from_training(tmp_path):
+    cfg = load_config(
+        "configs/base.yaml",
+        overrides={
+            "corpus": {"seq_len": 16, "token_budget": 16 * 6},
+            "eval": {"perplexity_tokens": 16},
+        },
+    )
+    docs = ["\nGentleman Jim said that he would visit his aunt next week."] * 40
+    sample_corpus(cfg, tmp_path, docs=docs)
+    stats = build_counterfactuals(cfg, tmp_path)
+    assert stats["rejected_rows"] > 0
+    tok = AutoTokenizer.from_pretrained(TOKENIZER)
+    for row in np.load(tmp_path / "train_tokens.npy"):
+        assert "Gentleman" not in tok.decode(row)
 
 
 # --- names -------------------------------------------------------------------
