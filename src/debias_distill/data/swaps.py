@@ -1,8 +1,14 @@
 """Word-pair substitution lists and substitution.
 
-`counterfactual(text, table)` rewrites plain text: each listed word is replaced
-by its counterpart, with context-dependent words ("her" -> "him"/"his", the title
-"Miss") resolved from the word that follows.
+Substitution works at two levels:
+
+- `counterfactual(text, table)` rewrites plain text (used for inspection and tests).
+- `TokenSwapper` rewrites token-id sequences in place, replacing each listed word
+  with a word of exactly the same token length, so the substituted sequence has
+  the same length as the original. A sequence is rejected (no variant produced)
+  when any listed word in it cannot be replaced this way, when an ambiguous
+  pronoun has no following context, or when it contains a blocked word, so
+  variants are never partially substituted.
 
 List files in the swap directory:
   *.tsv          bidirectional male<TAB>female pairs (lowercase; applied to lowercase
@@ -18,9 +24,12 @@ deliberately left untouched.
 """
 
 import re
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import numpy as np
 
 WORD_RE = re.compile(r"[A-Za-z]+")
 ONE_WAY_FILE = "one_way.tsv"
@@ -259,3 +268,130 @@ def counterfactual(text: str, table: SwapTable) -> tuple[str, list[str]]:
         last = m.end()
     out.append(text[last:])
     return "".join(out), unhandled
+
+
+def count_listed(text: str, table: SwapTable) -> int:
+    return sum(table.is_listed(m.group()) for m in WORD_RE.finditer(text))
+
+
+@dataclass
+class SwapStats:
+    sequences: int = 0
+    with_listed_words: int = 0
+    produced: int = 0
+    rejected: Counter = field(default_factory=Counter)  # reason -> count
+    swaps: Counter = field(default_factory=Counter)  # "src->dst" -> count
+    ambiguous_contexts: Counter = field(default_factory=Counter)  # "her <next>" -> count
+
+    def to_dict(self) -> dict:
+        return {
+            "sequences": self.sequences,
+            "with_listed_words": self.with_listed_words,
+            "produced": self.produced,
+            "rejected": dict(self.rejected.most_common()),
+            "swaps": dict(self.swaps.most_common()),
+            "ambiguous_contexts": dict(self.ambiguous_contexts.most_common(50)),
+        }
+
+
+class TokenSwapper:
+    """Length-preserving substitution on token-id sequences."""
+
+    def __init__(self, tokenizer, table: SwapTable):
+        self.tokenizer = tokenizer
+        self.table = table
+        self.text = [tokenizer.decode([i]) for i in range(len(tokenizer))]
+        # first token id -> [(token ids of the form, word, has leading space)], longest first.
+        # Byte-level BPE splits on spaces first, so a word's tokens do not depend on context
+        # (except when glued to neighbouring letters, which the boundary checks exclude).
+        phrases: dict[int, list[tuple[tuple[int, ...], str, bool]]] = defaultdict(list)
+        for word in table.source_forms():
+            for space in (True, False):
+                ids = tuple(self._encode((" " if space else "") + word))
+                phrases[ids[0]].append((ids, word, space))
+        self._phrases = {k: sorted(v, key=lambda p: -len(p[0])) for k, v in phrases.items()}
+        self._first_ids = np.fromiter(self._phrases, dtype=np.int64)
+        self._encoded: dict[str, tuple[int, ...]] = {}
+        self.stats = SwapStats()
+        self.last_status = ""  # "unlisted", "rejected" or "produced" for the last swap() call
+
+    def _encode(self, s: str) -> list[int]:
+        return self.tokenizer(s, add_special_tokens=False)["input_ids"]
+
+    def _encode_cached(self, s: str) -> tuple[int, ...]:
+        if s not in self._encoded:
+            self._encoded[s] = tuple(self._encode(s))
+        return self._encoded[s]
+
+    def _match(self, ids: np.ndarray, pos: int) -> tuple[tuple[int, ...], str, bool] | None:
+        """The listed word starting at `pos` as a whole word, if any."""
+        for phrase, word, space in self._phrases[int(ids[pos])]:
+            end = pos + len(phrase)
+            if end > len(ids) or tuple(int(x) for x in ids[pos:end]) != phrase:
+                continue
+            if end < len(ids) and _is_letter(self.text[ids[end]][:1]):
+                continue  # glued to the following letters: part of a longer word
+            if not space and (pos == 0 or _is_letter(self.text[ids[pos - 1]][-1:])):
+                continue  # glued to the preceding letters, or no left context
+            return phrase, word, space
+        return None
+
+    def _reject(self, reason: str) -> None:
+        self.stats.rejected[reason] += 1
+
+    def swap(self, ids: np.ndarray) -> np.ndarray | None:
+        """Return the substituted copy of `ids`, or None if there is nothing to swap or it is rejected.
+
+        `last_status` tells the two None cases apart.
+        """
+        self.stats.sequences += 1
+        self.last_status = "rejected"  # until proven otherwise
+        decoded = self.tokenizer.decode(ids)
+        listed_in_text = count_listed(decoded, self.table)
+        if not listed_in_text:
+            self.last_status = "unlisted"
+            return None
+        self.stats.with_listed_words += 1
+        if blocked := self.table.blocked_word(decoded):
+            self._reject(f"blocked:{blocked}")
+            return None
+
+        out = ids.copy()
+        n_swapped, next_free = 0, 0
+        pending: Counter = Counter()
+        for pos in np.flatnonzero(np.isin(ids, self._first_ids)):
+            if pos < next_free:
+                continue
+            match = self._match(ids, pos)
+            if match is None:
+                continue
+            phrase, word, space = match
+            end = pos + len(phrase)
+            is_contextual = word.lower() in self.table.ambiguous or word in self.table.conditional
+            if is_contextual and end >= len(ids):
+                self._reject(f"no_context_at_row_end:{word}")
+                return None
+            nxt = next_context("".join(self.text[i] for i in ids[end : end + 3]), 0)
+            repl = swap_word(word, nxt, self.table)
+            if repl is None:
+                self._reject(f"unhandled:{word}")
+                return None
+            new = self._encode_cached((" " if space else "") + repl)
+            if len(new) != len(phrase):
+                self._reject(f"length_mismatch:{word}->{repl}")
+                return None
+            out[pos:end] = new
+            next_free = end
+            n_swapped += 1
+            pending[f"{word}->{repl}"] += 1
+            if word.lower() == "her" and _is_word(nxt) and nxt.lower() in AMBIGUOUS_FOLLOWERS:
+                self.stats.ambiguous_contexts[f"her {nxt.lower()} -> {repl}"] += 1
+
+        if n_swapped != listed_in_text:
+            # A listed word was not found as a whole-word token run (e.g. cut at the row edge).
+            self._reject("not_matched_in_tokens")
+            return None
+        self.stats.produced += 1
+        self.stats.swaps.update(pending)
+        self.last_status = "produced"
+        return out

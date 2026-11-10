@@ -3,11 +3,12 @@
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
 from transformers import AutoTokenizer
 
 from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
-from debias_distill.data.swaps import build_table, counterfactual, load_swap_pairs
+from debias_distill.data.swaps import TokenSwapper, build_table, counterfactual, load_swap_pairs
 from debias_distill.data.templates import (
     fill,
     load_names,
@@ -110,6 +111,14 @@ def test_no_place_names_in_candidates():
         assert not names & places
 
 
+def test_token_and_text_agree_on_context(tok, table):
+    swapper = TokenSwapper(tok, table)
+    for text in [" After his 20 years there, she raised her 2 kids.", ' He said "thank her."']:
+        out = swapper.swap(_ids(tok, text))
+        assert out is not None
+        assert tok.decode(out) == counterfactual(text, table)[0]
+
+
 def test_conflicting_pairs_rejected():
     with pytest.raises(ValueError, match="no resolver"):
         build_table([("man", "woman"), ("man", "lady")])
@@ -117,6 +126,57 @@ def test_conflicting_pairs_rejected():
 
 def test_name_lists_disjoint_from_words(table):
     assert not {n.lower() for n in table.exact} & set(table.words)
+
+
+# --- token-level substitution ------------------------------------------------
+
+
+def _ids(tok, text):
+    return np.array(tok(text, add_special_tokens=False)["input_ids"], dtype=np.uint16)
+
+
+def test_token_swap_preserves_length_and_matches_text(tok, table):
+    swapper = TokenSwapper(tok, table)
+    text = " He told her that his father would call him."
+    ids = _ids(tok, text)
+    out = swapper.swap(ids)
+    assert out is not None and out.shape == ids.shape
+    assert tok.decode(out) == counterfactual(text, table)[0]
+    changed = np.flatnonzero(out != ids)
+    assert len(changed) == 5
+
+
+def test_token_swap_multi_token_equal_length(tok, table):
+    swapper = TokenSwapper(tok, table)
+    # "Grandmother" / "Grandfather" (no leading space) are both 2 tokens.
+    for text in ["\nGrandmother said he would come.", " The chairmen thanked their wives."]:
+        ids = _ids(tok, text)
+        out = swapper.swap(ids)
+        assert out is not None and out.shape == ids.shape
+        assert tok.decode(out) == counterfactual(text, table)[0]
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("\nGentleman said he would come.", "length_mismatch:Gentleman->Lady"),
+        (" The chairman said he would come.", "length_mismatch:chairman->chairwoman"),
+        (" She is pregnant and he is happy.", "blocked:pregnant"),
+        (" Then he took his", "no_context_at_row_end:his"),
+        (" Miss you, he said.", "unhandled:Miss"),
+    ],
+)
+def test_token_swap_rejections(tok, table, text, reason):
+    swapper = TokenSwapper(tok, table)
+    assert swapper.swap(_ids(tok, text)) is None
+    assert swapper.last_status == "rejected"
+    assert list(swapper.stats.rejected) == [reason]
+
+
+def test_token_swap_skips_rows_without_listed_words(tok, table):
+    swapper = TokenSwapper(tok, table)
+    assert swapper.swap(_ids(tok, " The weather was nice today.")) is None
+    assert swapper.stats.with_listed_words == 0
 
 
 # --- templates ---------------------------------------------------------------
