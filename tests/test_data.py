@@ -7,6 +7,7 @@ import pytest
 from transformers import AutoTokenizer
 
 from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
+from debias_distill.data.swaps import build_table, counterfactual, load_swap_pairs
 from debias_distill.data.templates import (
     fill,
     load_names,
@@ -23,11 +24,99 @@ def tok():
     return AutoTokenizer.from_pretrained(TOKENIZER)
 
 
+@pytest.fixture(scope="module")
+def table():
+    return load_swap_pairs("data/swaps", name_pairs=load_names("train"))
+
+
+# --- text-level substitution -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("src", "expected"),
+    [
+        ("He said she was tired.", "She said he was tired."),
+        ("I saw her and waved.", "I saw him and waved."),
+        ("I saw her.", "I saw him."),
+        ("Her book is on his desk.", "His book is on her desk."),
+        ("The book is his.", "The book is hers."),
+        ("The book is hers.", "The book is his."),
+        ("He hurt himself.", "She hurt herself."),
+        ("My father and his brothers.", "My mother and her sisters."),
+        ("Mr Smith met the king.", "Mrs Smith met the queen."),
+        ("After his 20 years there.", "After her 20 years there."),
+        ("She raised her 2 children.", "He raised his 2 children."),
+        ('He said "thank her."', 'She said "thank him."'),
+        ('She read her "best" poem.', 'He read his "best" poem.'),
+        ("Was it his?", "Was it hers?"),
+        # possessive vs object after "her"
+        ("Her family was there.", "His family was there."),
+        ("She lost her only son.", "He lost his only daughter."),
+        ("He gave her all of it.", "She gave him all of it."),
+        ("He loved her deeply.", "She loved him deeply."),
+        ("I miss her - truly.", "I miss him - truly."),
+        ("He paid her $500.", "She paid him $500."),
+        # titles and one-way substitutions
+        ("Ms Lee said he left.", "Mr Lee said she left."),
+        ("Miss Smith said he left.", "Mr Smith said she left."),
+        ("The actress said she won.", "The actor said he won."),
+        ("My mum said he was late.", "My dad said she was late."),
+        # job titles and family words
+        ("The chairman and his wife.", "The chairwoman and her husband."),
+        ("My grandpa and his dad.", "My grandma and her mom."),
+    ],
+)
+def test_counterfactual_text(table, src, expected):
+    out, unhandled = counterfactual(src, table)
+    assert out == expected
+    assert unhandled == []
+
+
+def test_whole_words_only(table):
+    text = "The heroes managed the shelter; mankind hesitated."
+    assert counterfactual(text, table) == (text, [])
+
+
+def test_names_swap_only_when_capitalised(table):
+    male, female = load_names("train")[0]
+    assert counterfactual(f"{male} called {female}.", table)[0] == f"{female} called {male}."
+    assert counterfactual(male.lower(), table)[0] == male.lower()
+
+
+def test_blockers_are_only_listed_words(table):
+    assert "pregnant" in table.blockers and "prostate" in table.blockers
+    assert not table.blockers & {"of", "no", "any", "these", "words", "sequences"}  # comment line
+    assert table.blocked_word("He said it was of no use.") is None
+
+
+def test_miss_as_verb_is_unhandled(table):
+    assert counterfactual("Miss you, he said.", table)[1] == ["Miss"]
+    assert counterfactual("I miss him.", table) == ("I miss her.", [])
+
+
+def test_milliseconds_not_a_title(table):
+    assert counterfactual("It took 5 ms and he waited.", table)[0] == "It took 5 ms and she waited."
+
+
+def test_all_caps_reported_unhandled(table):
+    out, unhandled = counterfactual("HE left.", table)
+    assert out == "HE left." and unhandled == ["HE"]
+
+
 def test_no_place_names_in_candidates():
     places = {"Virginia", "Victoria", "Madison", "Charlotte", "Austin", "Brittany"}
     for g in ("male", "female"):
         names = set(Path(f"data/swaps/name_candidates_{g}.txt").read_text().split())
         assert not names & places
+
+
+def test_conflicting_pairs_rejected():
+    with pytest.raises(ValueError, match="no resolver"):
+        build_table([("man", "woman"), ("man", "lady")])
+
+
+def test_name_lists_disjoint_from_words(table):
+    assert not {n.lower() for n in table.exact} & set(table.words)
 
 
 # --- templates ---------------------------------------------------------------
