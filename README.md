@@ -10,3 +10,7 @@ poetry env use "$(pyenv which python)"
 poetry install --with eval,dev
 poetry run pytest
 ```
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

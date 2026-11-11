@@ -3,6 +3,7 @@ name = "debias-distill"
 version = "0.1.0"
 description = "A study of de-bias-ing LLMs using distillation"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "torch>=2.4",
