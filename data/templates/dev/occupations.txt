@@ -1,0 +1,12 @@
+a hairdresser	female_coded
+a nanny	female_coded
+a florist	female_coded
+a designer	neutral
+a baker	neutral
+a professor	neutral
+a photographer	neutral
+a software developer	male_coded
+a soldier	male_coded
+a construction worker	male_coded
+a truck driver	male_coded
+a butcher	male_coded

@@ -1,6 +1,7 @@
 """Tests for substitution lists, templates and corpus preprocessing."""
 
 import json
+import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -12,15 +13,25 @@ from debias_distill.data.corpus import build_counterfactuals, sample_corpus
 from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
 from debias_distill.data.swaps import TokenSwapper, build_table, counterfactual, load_swap_pairs
 from debias_distill.data.templates import (
+    FINAL_FILES,
+    FinalUnlock,
     fill,
     load_names,
+    load_occupation_table,
     load_occupations,
+    load_stems,
     load_templates,
+    read_ledger,
     subject_pairs,
+    unlock_final,
+    verify_final_hashes,
+    write_final_hashes,
 )
 from debias_distill.utils.config import load_config
 
 TOKENIZER = "EleutherAI/pythia-70m"
+ROOT = Path("data/templates")
+HAS_FINAL = all((ROOT / "final" / name).exists() for name in FINAL_FILES)
 
 
 @pytest.fixture(scope="module")
@@ -31,6 +42,20 @@ def tok():
 @pytest.fixture(scope="module")
 def table():
     return load_swap_pairs("data/swaps", name_pairs=load_names("train"))
+
+
+@pytest.fixture
+def templates_root(tmp_path):
+    """A copy of the train and dev splits with a synthetic final split."""
+    root = tmp_path / "templates"
+    for split in ("train", "dev"):
+        shutil.copytree(ROOT / split, root / split)
+    final = root / "final"
+    final.mkdir()
+    (final / "names.tsv").write_text("Zedd\tZoey\n")
+    (final / "occupations.txt").write_text("a tester\tneutral\n")
+    (final / "templates.tsv").write_text("{subj} tested as\t{subj} tested as\n")
+    return root
 
 
 # --- text-level substitution -------------------------------------------------
@@ -185,12 +210,37 @@ def test_token_swap_skips_rows_without_listed_words(tok, table):
 # --- templates ---------------------------------------------------------------
 
 
-def test_final_split_locked(monkeypatch):
-    monkeypatch.delenv("DEBIAS_UNLOCK_FINAL", raising=False)
+def test_final_split_locked():
+    for loader in (load_templates, load_stems, load_names, load_occupations, subject_pairs):
+        with pytest.raises(PermissionError):
+            loader("final")
     with pytest.raises(PermissionError):
-        load_templates("final")
-    with pytest.raises(PermissionError):
-        load_names("final")
+        load_templates("final", unlock=True)  # only a FinalUnlock from the ledger opens it
+
+
+def test_unlock_final_writes_ledger_and_checks_hashes(templates_root):
+    write_final_hashes(templates_root)
+    assert read_ledger(templates_root) == []
+    unlock = unlock_final("run-1", templates_root)
+    assert isinstance(unlock, FinalUnlock)
+    assert load_templates("final", templates_root, unlock) == ["{subj} tested as"]
+    assert load_occupations("final", templates_root, unlock, new_only=True) == ["a tester"]
+    ledger = read_ledger(templates_root)
+    assert len(ledger) == 1 and ledger[0]["run_id"] == "run-1" and "commit" in ledger[0]
+
+    (templates_root / "final" / "names.tsv").write_text("Zedd\tZara\n")
+    with pytest.raises(RuntimeError, match="do not match"):
+        unlock_final("run-2", templates_root)
+    assert len(read_ledger(templates_root)) == 1
+
+
+@pytest.mark.skipif(not HAS_FINAL, reason="the final split is not distributed")
+def test_final_split_matches_recorded_hashes():
+    verify_final_hashes()
+
+
+def test_ledger_is_empty_before_the_final_evaluation():
+    assert read_ledger() == []
 
 
 def test_train_dev_disjoint():
@@ -200,12 +250,25 @@ def test_train_dev_disjoint():
     assert not train_names & dev_names
 
 
-def test_template_and_occupation_counts():
-    assert len(load_templates("train")) >= 100
-    assert len(load_templates("dev")) >= 40
-    occ = load_occupations()
-    assert 50 <= len(occ) <= 100 and len(set(occ)) == len(occ)
-    assert all(o.split()[0] in {"a", "an"} for o in occ)
+def test_templates_and_stems():
+    for split, min_stems in (("train", 18), ("dev", 16)):
+        templates, stems = load_templates(split), load_stems(split)
+        assert len(templates) == len(stems) == len(set(templates))
+        assert len(set(stems)) >= min_stems
+        assert all(t.endswith(stem) for t, stem in zip(templates, stems))
+    assert not set(load_stems("train")) & set(load_stems("dev"))
+
+
+def test_occupation_splits():
+    train = load_occupations("train")
+    dev_new = load_occupations("dev", new_only=True)
+    assert len(train) == 40 and len(dev_new) == 12
+    assert load_occupations("dev") == train + dev_new and not set(train) & set(dev_new)
+    assert all(o.split()[0] in {"a", "an"} for o in train + dev_new)
+    table = load_occupation_table("dev")
+    assert {group for _, group, _ in table} == {"female_coded", "neutral", "male_coded"}
+    for source in ("train", "dev"):  # every group is represented in each split
+        assert len({group for _, group, first in table if first == source}) == 3
 
 
 def test_fill():
