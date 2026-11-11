@@ -1,7 +1,6 @@
 """Tests for substitution lists, templates and corpus preprocessing."""
 
 import json
-import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -40,25 +39,6 @@ from debias_distill.utils.manifest import inputs_match, read_manifest
 
 ROOT = Path("data/templates")
 HAS_FINAL = all((ROOT / "final" / name).exists() for name in FINAL_FILES)
-
-
-@pytest.fixture(scope="module")
-def tok():
-    return load_tokenizer(load_config("configs/base.yaml"))
-
-
-@pytest.fixture
-def templates_root(tmp_path):
-    """A copy of the train and dev splits with a synthetic final split."""
-    root = tmp_path / "templates"
-    for split in ("train", "dev"):
-        shutil.copytree(ROOT / split, root / split)
-    final = root / "final"
-    final.mkdir()
-    (final / "names.tsv").write_text("Zedd\tZoey\n")
-    (final / "occupations.txt").write_text("a tester\tneutral\n")
-    (final / "templates.tsv").write_text("{subj} tested as\t{subj} tested as\n")
-    return root
 
 
 @pytest.fixture(scope="module")
