@@ -8,7 +8,6 @@ Each run directory contains:
 
 import json
 import platform
-import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,21 +17,7 @@ import torch
 import transformers
 import yaml
 
-
-def _git_state() -> dict[str, Any]:
-    """Current commit hash and whether the working tree has uncommitted changes."""
-    try:
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip()
-        dirty = bool(
-            subprocess.run(
-                ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
-            ).stdout.strip()
-        )
-        return {"commit": commit, "dirty": dirty}
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return {"commit": None, "dirty": None}
+from debias_distill.utils.manifest import git_state
 
 
 def _now() -> str:
@@ -55,7 +40,7 @@ class RunLogger:
             "run_id": run_id,
             "started": _now(),
             "finished": None,
-            "git": _git_state(),
+            "git": git_state(),
             "seed": config.get("seed"),
             "device": config.get("device"),
             "python": platform.python_version(),

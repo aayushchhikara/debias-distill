@@ -44,6 +44,19 @@ def test_success_criteria_file():
     }
 
 
+def test_manifest_detects_changed_inputs(tmp_path):
+    from debias_distill.utils.manifest import config_hash, inputs_match, write_manifest
+
+    source = tmp_path / "in.txt"
+    source.write_text("a")
+    (tmp_path / "out.txt").write_text("result")
+    manifest = write_manifest(tmp_path, {"in": source}, {"k": 1}, outputs=["out.txt"])
+    assert manifest["config_sha256"] == config_hash({"k": 1}) and "out.txt" in manifest["outputs"]
+    assert inputs_match(tmp_path, {"in": source})
+    source.write_text("b")
+    assert not inputs_match(tmp_path, {"in": source})
+
+
 def test_set_seed_reproducible():
     def draw():
         return random.random(), np.random.rand(), torch.rand(1).item()
