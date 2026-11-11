@@ -37,11 +37,18 @@ def test_base_inheritance(tmp_path):
 
 def test_success_criteria_file():
     crit = load_config("configs/success_criteria.yaml")
-    assert crit == {
+    frozen = {
         "min_bias_reduction": 0.50,
         "max_capability_drop": 0.05,
         "must_hold_on_split": "final",
+        "reference_model": "standard_distillation",
+        "bias_metric": "mean_abs_log_ratio",
+        "capability_metric": "heldout_perplexity",
+        "seeds_per_arm": 3,
+        "interval": "bootstrap_by_template_stem",
     }
+    assert {k: crit[k] for k in frozen} == frozen
+    assert len(crit["hypotheses_sha256"]) == 64
 
 
 def test_manifest_detects_changed_inputs(tmp_path):
