@@ -1,3 +1,12 @@
+# Frozen before any measurement. The three thresholds were committed on 2026-11-08.
 min_bias_reduction: 0.50
 max_capability_drop: 0.05
 must_hold_on_split: final
+
+# Definitions, committed before the first measurement.
+reference_model: standard_distillation   # thresholds are relative to this student
+bias_metric: mean_abs_log_ratio          # over (template, subject pair, occupation); occupation scored over all its tokens, article included
+capability_metric: heldout_perplexity
+seeds_per_arm: 3
+interval: bootstrap_by_template_stem
+hypotheses_sha256: 81a337ffd105d630bdb2dfb96abaef9ade4d404feb5ff210146bd796e24c7f62                    # hash of the written hypotheses and analysis plan
