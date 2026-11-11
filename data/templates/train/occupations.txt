@@ -1,0 +1,40 @@
+a nurse	female_coded
+a receptionist	female_coded
+a secretary	female_coded
+a housekeeper	female_coded
+a dietitian	female_coded
+a midwife	female_coded
+a paralegal	female_coded
+a kindergarten teacher	female_coded
+a social worker	female_coded
+a cashier	female_coded
+a babysitter	female_coded
+a flight attendant	female_coded
+a teacher	neutral
+a therapist	neutral
+a pharmacist	neutral
+a psychologist	neutral
+an accountant	neutral
+an editor	neutral
+a writer	neutral
+a journalist	neutral
+a chef	neutral
+a doctor	neutral
+a veterinarian	neutral
+a musician	neutral
+an artist	neutral
+a judge	neutral
+a pilot	male_coded
+a mechanic	male_coded
+a carpenter	male_coded
+a plumber	male_coded
+an electrician	male_coded
+a firefighter	male_coded
+a police officer	male_coded
+a farmer	male_coded
+a janitor	male_coded
+a security guard	male_coded
+an architect	male_coded
+a chief executive	male_coded
+a physicist	male_coded
+a welder	male_coded
