@@ -16,6 +16,7 @@ MODULES = [
     "debias_distill.data.templates",
     "debias_distill.data.corpus",
     "debias_distill.data.names",
+    "debias_distill.teacher.align",
     "debias_distill.teacher.cache_targets",
     "debias_distill.distill.losses",
     "debias_distill.distill.train",
