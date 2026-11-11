@@ -16,8 +16,8 @@ Usage:
   python -m debias_distill.data.corpus --token-budget 200000 --out /tmp/x   # quick trial
   python -m debias_distill.data.corpus --skip-sample      # rebuild variants only
 
-Variants use the train name pairs, which are derived from the sampled slice. After a
-fresh sample, run `python -m debias_distill.data.names`, then rebuild with --skip-sample.
+Swapped copies use the frozen train name pairs plus the corpus-only pairs in
+`data/swaps/corpus_names.tsv`. `manifest.json` records the hashes of every input.
 """
 
 import argparse
@@ -29,11 +29,13 @@ from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
-from transformers import AutoTokenizer
 
+from debias_distill.data.names import unpaired_candidates
 from debias_distill.data.swaps import TokenSwapper, load_swap_pairs
-from debias_distill.data.templates import load_names
+from debias_distill.data.templates import load_heldout_names, load_names
 from debias_distill.utils.config import load_config
+from debias_distill.utils.hub import load_tokenizer
+from debias_distill.utils.manifest import write_manifest
 
 
 def iter_documents(cfg: dict) -> Iterator[str]:
@@ -101,7 +103,7 @@ def sample_corpus(cfg: dict, out_dir: str | Path, docs: Iterable[str] | None = N
     """Collect the held-out slice first, then the training slice, from one document stream."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    tok = AutoTokenizer.from_pretrained(cfg["student"])
+    tok = load_tokenizer(cfg)
     assert len(tok) < np.iinfo(np.uint16).max, "vocabulary does not fit in uint16"
 
     seq_len = cfg["corpus"]["seq_len"]
@@ -132,11 +134,20 @@ def sample_corpus(cfg: dict, out_dir: str | Path, docs: Iterable[str] | None = N
 
 
 def build_counterfactuals(cfg: dict, out_dir: str | Path) -> dict:
-    """Produce length-preserving substituted variants of training rows that contain listed words."""
+    """Build gender-swapped copies of the training rows, each the same length as its original.
+
+    Rows that cannot be fully swapped, that contain a sex-specific word, or that contain a
+    held-out or unpaired first name are excluded from training and saved separately.
+    """
     out = Path(out_dir)
-    tok = AutoTokenizer.from_pretrained(cfg["student"])
+    tok = load_tokenizer(cfg)
+    swaps_dir, templates_dir = Path(cfg["data"]["swaps_dir"]), Path(cfg["data"]["templates_dir"])
+    # Rows with a dev or final name are removed so held-out names never reach training.
+    # Rows with a candidate name that has no swap partner would be partially substituted.
+    rejects = dict.fromkeys(unpaired_candidates(swaps_dir, templates_dir), "unpaired_name")
+    rejects.update(dict.fromkeys(load_heldout_names(templates_dir), "heldout_name"))
     table = load_swap_pairs(
-        cfg["data"]["swaps_dir"], name_pairs=load_names("train", cfg["data"]["templates_dir"])
+        swaps_dir, name_pairs=load_names("train", templates_dir), rejects=rejects
     )
     swapper = TokenSwapper(tok, table)
 
@@ -165,6 +176,18 @@ def build_counterfactuals(cfg: dict, out_dir: str | Path) -> dict:
     stats["train_tokens"] = len(keep) * seq_len
     stats["rejected_rows"] = len(rejected)
     (out / "cf_stats.json").write_text(json.dumps(stats, indent=2))
+
+    inputs = {f"swaps/{p.name}": p for p in sorted(swaps_dir.iterdir()) if p.is_file()}
+    inputs.update(
+        {f"names/{s}": templates_dir / s / "names.tsv" for s in ("train", "dev", "final")}
+    )
+    inputs["sampled_tokens.npy"] = out / "sampled_tokens.npy"
+    write_manifest(
+        out,
+        inputs,
+        cfg,
+        outputs=["train_tokens.npy", "cf_tokens.npy", "cf_index.npy", "rejected_tokens.npy"],
+    )
     return stats
 
 

@@ -7,15 +7,22 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from transformers import AutoTokenizer
 
 from debias_distill.data.corpus import build_counterfactuals, sample_corpus
-from debias_distill.data.names import build_name_pairs, count_names, split_pairs, usable
+from debias_distill.data.names import (
+    build_corpus_pairs,
+    build_name_pairs,
+    count_names,
+    split_pairs,
+    unpaired_candidates,
+    usable,
+)
 from debias_distill.data.swaps import TokenSwapper, build_table, counterfactual, load_swap_pairs
 from debias_distill.data.templates import (
     FINAL_FILES,
     FinalUnlock,
     fill,
+    load_heldout_names,
     load_names,
     load_occupation_table,
     load_occupations,
@@ -28,20 +35,16 @@ from debias_distill.data.templates import (
     write_final_hashes,
 )
 from debias_distill.utils.config import load_config
+from debias_distill.utils.hub import load_tokenizer
+from debias_distill.utils.manifest import inputs_match, read_manifest
 
-TOKENIZER = "EleutherAI/pythia-70m"
 ROOT = Path("data/templates")
 HAS_FINAL = all((ROOT / "final" / name).exists() for name in FINAL_FILES)
 
 
 @pytest.fixture(scope="module")
 def tok():
-    return AutoTokenizer.from_pretrained(TOKENIZER)
-
-
-@pytest.fixture(scope="module")
-def table():
-    return load_swap_pairs("data/swaps", name_pairs=load_names("train"))
+    return load_tokenizer(load_config("configs/base.yaml"))
 
 
 @pytest.fixture
@@ -56,6 +59,11 @@ def templates_root(tmp_path):
     (final / "occupations.txt").write_text("a tester\tneutral\n")
     (final / "templates.tsv").write_text("{subj} tested as\t{subj} tested as\n")
     return root
+
+
+@pytest.fixture(scope="module")
+def table():
+    return load_swap_pairs("data/swaps", name_pairs=load_names("train"))
 
 
 # --- text-level substitution -------------------------------------------------
@@ -285,14 +293,19 @@ def test_subject_pairs_start_with_pronouns():
 # --- corpus pipeline (synthetic documents, no network) -----------------------
 
 
-def test_corpus_pipeline(tmp_path):
-    cfg = load_config(
+def _pipeline_cfg(templates_root, seq_len, rows, heldout_tokens):
+    return load_config(
         "configs/base.yaml",
         overrides={
-            "corpus": {"seq_len": 32, "token_budget": 32 * 20},
-            "eval": {"perplexity_tokens": 64},
+            "data": {"templates_dir": str(templates_root)},
+            "corpus": {"seq_len": seq_len, "token_budget": seq_len * rows},
+            "eval": {"perplexity_tokens": heldout_tokens},
         },
     )
+
+
+def test_corpus_pipeline(tmp_path, templates_root):
+    cfg = _pipeline_cfg(templates_root, 32, 20, 64)
     docs = [
         "He went to the market and bought apples for his mother.",
         "The weather report predicted rain for the whole week ahead of us.",
@@ -313,22 +326,38 @@ def test_corpus_pipeline(tmp_path):
     assert all((cf[k] != train[i]).any() for k, i in enumerate(idx))
     assert json.loads((tmp_path / "cf_stats.json").read_text())["produced"] == stats["produced"]
 
+    manifest = read_manifest(tmp_path)
+    assert set(manifest["outputs"]) >= {"train_tokens.npy", "cf_tokens.npy", "cf_index.npy"}
+    inputs = {"sampled_tokens.npy": tmp_path / "sampled_tokens.npy"}
+    assert manifest["inputs"]["sampled_tokens.npy"]
+    assert not inputs_match(tmp_path, inputs)  # the manifest records more inputs than this
 
-def test_rejected_rows_excluded_from_training(tmp_path):
-    cfg = load_config(
-        "configs/base.yaml",
-        overrides={
-            "corpus": {"seq_len": 16, "token_budget": 16 * 6},
-            "eval": {"perplexity_tokens": 16},
-        },
-    )
+
+def test_rejected_rows_excluded_from_training(tmp_path, templates_root):
+    cfg = _pipeline_cfg(templates_root, 16, 6, 16)
     docs = ["\nGentleman Jim said that he would visit his aunt next week."] * 40
     sample_corpus(cfg, tmp_path, docs=docs)
     stats = build_counterfactuals(cfg, tmp_path)
     assert stats["rejected_rows"] > 0
-    tok = AutoTokenizer.from_pretrained(TOKENIZER)
+    tok = load_tokenizer(cfg)
     for row in np.load(tmp_path / "train_tokens.npy"):
         assert "Gentleman" not in tok.decode(row)
+
+
+def test_heldout_names_never_reach_training(tmp_path, templates_root, tok):
+    cfg = _pipeline_cfg(templates_root, 16, 12, 16)
+    dev_name = load_names("dev")[0][1]
+    docs = [
+        f"Yesterday {dev_name} went to the market to buy some fresh bread.",  # no gendered word
+        "Yesterday Zoey said that she would visit the old museum again.",
+        "The weather report predicted rain for the whole week ahead of us.",
+    ] * 30
+    sample_corpus(cfg, tmp_path, docs=docs)
+    stats = build_counterfactuals(cfg, tmp_path)
+    assert stats["rejected"]["heldout_name"] > 0
+    assert not any(k.startswith("heldout_name:") for k in stats["rejected"])  # names not logged
+    kept = tok.batch_decode(np.load(tmp_path / "train_tokens.npy"))
+    assert kept and not any(dev_name in text or "Zoey" in text for text in kept)
 
 
 # --- names -------------------------------------------------------------------
@@ -358,6 +387,41 @@ def test_name_filter_and_pairing(tok):
 def test_count_names_whole_words_exact_case():
     text = "Mary met Maryann. mary left. MARY? Mary's book."
     assert count_names(text, ["Mary"])["Mary"] == 2
+
+
+def test_corpus_pairs_cover_every_candidate_outside_the_splits(tok):
+    pairs, left = build_corpus_pairs(
+        tok, ["John", "David", "Jayden"], ["Kate", "Jane", "Vanessa", "Mary"], taken={"Mary"}
+    )
+    assert left == [] and len(pairs) == 3
+    assert ("Jayden", "Vanessa") in pairs  # both are two tokens with a leading space
+    assert "Mary" not in {n for pair in pairs for n in pair}
+
+
+def test_committed_name_lists_are_consistent(table):
+    corpus_names = {
+        n
+        for row in Path("data/swaps/corpus_names.tsv").read_text().split("\n")
+        if row
+        for n in row.split("\t")
+    }
+    train = {n for pair in load_names("train") for n in pair}
+    dev = {n for pair in load_names("dev") for n in pair}
+    assert not corpus_names & (train | dev)
+    assert corpus_names <= set(table.exact)
+    if HAS_FINAL:
+        assert unpaired_candidates("data/swaps", ROOT) == frozenset()
+        assert not load_heldout_names() & set(table.exact)
+
+
+def test_reject_words_remove_the_row(tok):
+    table = load_swap_pairs("data/swaps", rejects={"Zoey": "heldout_name"})
+    swapper = TokenSwapper(tok, table)
+    assert swapper.swap(_ids(tok, " Zoey bought bread.")) is None
+    assert swapper.last_status == "rejected"
+    assert dict(swapper.stats.rejected) == {"heldout_name": 1}
+    with pytest.raises(ValueError, match="both substituted and rejected"):
+        build_table([], name_pairs=[("Adam", "Eve")], rejects={"Eve": "heldout_name"})
 
 
 def test_split_pairs_round_robin():
