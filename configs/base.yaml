@@ -22,6 +22,10 @@ corpus:
 
 topk: 50                         # teacher tokens stored per position, plus the residual mass
 
+teacher_cache:
+  batch_pairs: 8                 # rows per batch = 2 x this (each row with its swapped copy)
+  flush_every: 20                # batches between checkpoints
+
 distill:
   target: plain
   temperature: 1.0
