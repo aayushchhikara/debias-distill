@@ -1,0 +1,10 @@
+# Tiny end-to-end run on CPU: python -m debias_distill.data.corpus --config configs/smoke.yaml
+base: base.yaml
+device: cpu
+data:
+  corpus_dir: data/corpus/smoke
+  cache_dir: cache/smoke
+corpus:
+  token_budget: 50_000
+eval:
+  perplexity_tokens: 5_120
