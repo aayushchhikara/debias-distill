@@ -6,9 +6,12 @@ data:
   swaps_dir: data/swaps
   templates_dir: data/templates
   corpus_dir: data/corpus
+  cache_dir: cache
 
 teacher: EleutherAI/pythia-410m
+teacher_revision: 9879c9b5f8bea9051dcb0e68dff21493d67e9d4f
 student: EleutherAI/pythia-70m
+student_revision: a39f36b100fe8a5377810d56c3f4789b9c53ac42
 
 corpus:
   name: HuggingFaceFW/fineweb    # ODC-By (Common Crawl derived; attribution required)
@@ -17,7 +20,7 @@ corpus:
   token_budget: 10_000_000       # recommended range: 5–20M
   seq_len: 512
 
-topk: 32                         # recommended range: 20–50
+topk: 50                         # teacher tokens stored per position, plus the residual mass
 
 distill:
   target: plain
@@ -27,7 +30,7 @@ distill:
   grad_accum: 4
   epochs: 1
   hard_label_weight: 0.0         # λ for optional hard-label CE term
-  dtype: bfloat16
+  dtype: float32                 # the student trains as fast in fp32 as in bf16 on MPS
   checkpoint_every: 500          # steps
 
 loop:
@@ -38,5 +41,3 @@ loop:
 eval:
   split: dev
   perplexity_tokens: 200_000
-  lambada_n: 500
-  hellaswag_n: 500

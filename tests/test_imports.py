@@ -10,6 +10,8 @@ MODULES = [
     "debias_distill.utils.seed",
     "debias_distill.utils.device",
     "debias_distill.utils.runlog",
+    "debias_distill.utils.manifest",
+    "debias_distill.utils.hub",
     "debias_distill.data.swaps",
     "debias_distill.data.templates",
     "debias_distill.data.corpus",
