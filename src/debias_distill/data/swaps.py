@@ -17,6 +17,11 @@ List files in the swap directory:
                  Capitalized source matches only that exact form
   blockers.txt   words whose presence means the text is legitimately sex-specific
                  (e.g. pregnancy); such sequences get no variant
+  corpus_names.tsv  male<TAB>female first-name pairs used only for substituting the
+                 training corpus (never in evaluation templates), exact case
+
+A table can also carry reject words: exact-case words (held-out or unpaired first
+names) whose presence removes the whole sequence from training.
 
 Names match only in their exact (Capitalized) form. Other casings (e.g. ALL CAPS)
 are reported as unhandled. Singular "they" and other gender-neutral words are
@@ -33,6 +38,7 @@ import numpy as np
 
 WORD_RE = re.compile(r"[A-Za-z]+")
 ONE_WAY_FILE = "one_way.tsv"
+CORPUS_NAMES_FILE = "corpus_names.tsv"
 BLOCKERS_FILE = "blockers.txt"
 
 # Words after "her" that indicate the object reading ("saw her and ...") -> "him".
@@ -129,6 +135,7 @@ class SwapTable:
     exact: dict[str, str] = field(default_factory=dict)  # exact case -> exact case (names, titles)
     conditional: frozenset[str] = frozenset()  # exact-case words resolved by context
     blockers: frozenset[str] = frozenset()  # lowercase
+    rejects: dict[str, str] = field(default_factory=dict)  # exact-case word -> reason
 
     def is_listed(self, word: str) -> bool:
         """True if `word` is one this table is responsible for substituting."""
@@ -143,6 +150,15 @@ class SwapTable:
         for w in (*self.words, *self.ambiguous):
             forms.update({w, w.capitalize()})
         return forms
+
+    def reject_reason(self, text: str) -> str | None:
+        """The reason of the first reject word in `text`, if any."""
+        if not self.rejects:
+            return None
+        for m in WORD_RE.finditer(text):
+            if m.group() in self.rejects:
+                return self.rejects[m.group()]
+        return None
 
     def blocked_word(self, text: str) -> str | None:
         """The first blocker word in `text`, if any."""
@@ -169,6 +185,7 @@ def build_table(
     name_pairs: list[tuple[str, str]] | None = None,
     one_way: list[tuple[str, str]] | None = None,
     blockers: list[str] | None = None,
+    rejects: dict[str, str] | None = None,
 ) -> SwapTable:
     """Build a table. A word with several bidirectional targets must have a resolver."""
     targets: dict[str, set[str]] = {}
@@ -203,24 +220,37 @@ def build_table(
             add_exact(src, dst)
         else:
             words[src] = dst
+    rejects = dict(rejects or {})
+    if clash := sorted(set(rejects) & set(exact)):
+        raise ValueError(f"words are both substituted and rejected: {clash}")
     return SwapTable(
         words=words,
         ambiguous=frozenset(ambiguous),
         exact=exact,
         conditional=frozenset(_CONDITIONAL),
         blockers=frozenset(w.lower() for w in blockers or []),
+        rejects=rejects,
     )
 
 
 def load_swap_pairs(
-    swap_dir: str | Path = "data/swaps", name_pairs: list[tuple[str, str]] | None = None
+    swap_dir: str | Path = "data/swaps",
+    name_pairs: list[tuple[str, str]] | None = None,
+    rejects: dict[str, str] | None = None,
 ) -> SwapTable:
-    """Load the list files in `swap_dir` (see module docstring), plus optional name pairs."""
+    """Load the list files in `swap_dir` (see module docstring).
+
+    `name_pairs` are added to the corpus-only pairs from `corpus_names.tsv`.
+    """
     swap_dir = Path(swap_dir)
     pairs: list[tuple[str, str]] = []
     for path in sorted(swap_dir.glob("*.tsv")):
-        if path.name != ONE_WAY_FILE:
+        if path.name not in (ONE_WAY_FILE, CORPUS_NAMES_FILE):
             pairs.extend(_read_pairs(path))
+    corpus_names_path = swap_dir / CORPUS_NAMES_FILE
+    all_names = list(name_pairs or [])
+    if corpus_names_path.exists():
+        all_names.extend(_read_pairs(corpus_names_path))
     one_way_path = swap_dir / ONE_WAY_FILE
     one_way = _read_pairs(one_way_path) if one_way_path.exists() else []
     blockers_path = swap_dir / BLOCKERS_FILE
@@ -229,7 +259,7 @@ def load_swap_pairs(
         for line in blockers_path.read_text().splitlines():
             if not line.lstrip().startswith("#"):
                 blockers.extend(line.split())
-    return build_table(pairs, name_pairs, one_way, blockers)
+    return build_table(pairs, all_names, one_way, blockers, rejects)
 
 
 def swap_word(word: str, next_word: str | None, table: SwapTable) -> str | None:
@@ -253,7 +283,7 @@ def swap_word(word: str, next_word: str | None, table: SwapTable) -> str | None:
 
 
 def counterfactual(text: str, table: SwapTable) -> tuple[str, list[str]]:
-    """Return (substituted_text, unhandled_words). Blockers are not applied here."""
+    """Return (substituted_text, unhandled_words). Blockers and rejects are not applied here."""
     out, unhandled, last = [], [], 0
     for m in WORD_RE.finditer(text):
         word = m.group()
@@ -347,6 +377,9 @@ class TokenSwapper:
         self.stats.sequences += 1
         self.last_status = "rejected"  # until proven otherwise
         decoded = self.tokenizer.decode(ids)
+        if reason := self.table.reject_reason(decoded):
+            self._reject(reason)
+            return None
         listed_in_text = count_listed(decoded, self.table)
         if not listed_in_text:
             self.last_status = "unlisted"
