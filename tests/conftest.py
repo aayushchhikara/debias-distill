@@ -4,11 +4,32 @@ import shutil
 from pathlib import Path
 
 import pytest
+import torch
 
 from debias_distill.utils.config import load_config
 from debias_distill.utils.hub import load_tokenizer
 
 ROOT = Path("data/templates")
+
+
+@pytest.fixture(scope="session")
+def tiny_lm():
+    """Factory for a tiny random causal LM with the real vocabulary size."""
+    from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
+
+    def make(seed: int = 0):
+        torch.manual_seed(seed)
+        config = GPTNeoXConfig(
+            vocab_size=50304,
+            hidden_size=16,
+            num_hidden_layers=2,
+            num_attention_heads=2,
+            intermediate_size=32,
+            max_position_embeddings=64,
+        )
+        return GPTNeoXForCausalLM(config).eval()
+
+    return make
 
 
 @pytest.fixture(scope="module")
