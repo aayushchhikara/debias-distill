@@ -20,6 +20,7 @@ MODULES = [
     "debias_distill.teacher.cache_targets",
     "debias_distill.distill.losses",
     "debias_distill.distill.train",
+    "debias_distill.measure.scoring",
     "debias_distill.measure.bias",
     "debias_distill.measure.capability",
     "debias_distill.measure.benchmarks",
