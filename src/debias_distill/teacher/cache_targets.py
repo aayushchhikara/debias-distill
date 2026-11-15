@@ -135,12 +135,8 @@ def _cache_key(cfg: dict, inputs: dict[str, Path], watch: list[int]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def cache_teacher_targets(cfg: dict, model=None, max_batches: int | None = None) -> Path:
-    """Build (or resume) the target cache for `cfg` and return its directory.
-
-    `model` overrides the teacher (used by tests). `max_batches` stops early, leaving a
-    resumable cache.
-    """
+def _plan(cfg: dict):
+    """Inputs, token map, watch-list and cache directory for `cfg`."""
     corpus = Path(cfg["data"]["corpus_dir"])
     swaps_dir, templates_dir = Path(cfg["data"]["swaps_dir"]), Path(cfg["data"]["templates_dir"])
     tokenizer = load_tokenizer(cfg, "teacher")
@@ -153,6 +149,26 @@ def cache_teacher_targets(cfg: dict, model=None, max_batches: int | None = None)
     inputs["names/train"] = templates_dir / "train" / "names.tsv"
     inputs["occupations/train"] = templates_dir / "train" / "occupations.txt"
     out = Path(cfg["data"]["cache_dir"]) / _cache_key(cfg, inputs, watch)
+    return out, inputs, token_map, unmapped, watch
+
+
+def finished_cache(cfg: dict) -> Path:
+    """Directory of the finished cache for `cfg`; raises if it has not been built."""
+    out = _plan(cfg)[0]
+    if not (out / "meta.json").exists():
+        raise FileNotFoundError(
+            f"no finished teacher cache at {out}; run python -m debias_distill.teacher.cache_targets"
+        )
+    return out
+
+
+def cache_teacher_targets(cfg: dict, model=None, max_batches: int | None = None) -> Path:
+    """Build (or resume) the target cache for `cfg` and return its directory.
+
+    `model` overrides the teacher (used by tests). `max_batches` stops early, leaving a
+    resumable cache.
+    """
+    out, inputs, token_map, unmapped, watch = _plan(cfg)
     meta_path, progress_path = out / "meta.json", out / "progress.json"
     if meta_path.exists():
         return out  # finished earlier with identical inputs

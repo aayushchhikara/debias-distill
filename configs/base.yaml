@@ -28,15 +28,18 @@ teacher_cache:
   flush_every: 20                # batches between checkpoints
 
 distill:
-  target: plain
-  temperature: 1.0
+  arm: A                         # label used in run names
+  data: originals                # originals | both (originals and their swapped copies)
+  target: plain                  # plain | mean | aligned | hard (next-token labels, no teacher)
   lr: 1.0e-4
   batch_size: 8
-  grad_accum: 4
-  epochs: 1
-  hard_label_weight: 0.0         # λ for optional hard-label CE term
-  dtype: float32                 # the student trains as fast in fp32 as in bf16 on MPS
-  checkpoint_every: 500          # steps
+  grad_accum: 4                  # optimizer step every batch_size x grad_accum rows
+  steps: 471                     # optimizer steps, the same for every arm (one pass over the originals)
+  warmup_steps: 24
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  checkpoint_every: 50           # optimizer steps between resumable checkpoints
+  log_every: 10
 
 loop:
   rounds: 3                      # recommended range: 3–5
