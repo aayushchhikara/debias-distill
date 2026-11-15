@@ -27,11 +27,18 @@ def _now() -> str:
 class RunLogger:
     """Writes resolved config, metadata and metrics for a single run."""
 
-    def __init__(self, run_id: str, config: dict[str, Any], root: str | Path = "experiments"):
+    def __init__(
+        self,
+        run_id: str,
+        config: dict[str, Any],
+        root: str | Path = "experiments",
+        resume: bool = False,
+    ):
+        """Create the run folder. With `resume`, continue an existing one and append to its metrics."""
         self.dir = Path(root) / run_id
-        if self.dir.exists():
+        if self.dir.exists() and not resume:
             raise FileExistsError(f"run directory already exists: {self.dir}")
-        self.dir.mkdir(parents=True)
+        self.dir.mkdir(parents=True, exist_ok=True)
 
         with (self.dir / "config.yaml").open("w") as f:
             yaml.safe_dump(config, f, sort_keys=False)
@@ -48,6 +55,10 @@ class RunLogger:
             "transformers": transformers.__version__,
             "platform": platform.platform(),
         }
+        if resume and (self.dir / "meta.json").exists():
+            previous = json.loads((self.dir / "meta.json").read_text())
+            self.meta["started"] = previous["started"]
+            self.meta["resumed"] = [*previous.get("resumed", []), _now()]
         self._write_meta()
         self._metrics = (self.dir / "metrics.jsonl").open("a")
         self._t0 = time.monotonic()
