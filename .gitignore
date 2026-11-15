@@ -13,6 +13,9 @@ cache/*
 !cache/.gitkeep
 experiments/*
 !experiments/.gitkeep
+# External benchmarks are downloaded locally, never redistributed
+data/benchmarks/*
+!data/benchmarks/.gitkeep
 # Held-out evaluation split stays local
 data/templates/final/*
 !data/templates/final/.gitkeep

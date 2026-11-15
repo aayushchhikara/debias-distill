@@ -1,5 +1,6 @@
 """Load models and tokenizers at the revisions pinned in the config."""
 
+from pathlib import Path
 from typing import Any
 
 from transformers import AutoTokenizer
@@ -17,3 +18,14 @@ def load_model(cfg: dict[str, Any], role: str, dtype=None):
     return AutoModelForCausalLM.from_pretrained(
         cfg[role], revision=cfg.get(f"{role}_revision"), dtype=dtype
     )
+
+
+def load_checkpoint(cfg: dict[str, Any], checkpoint: str, dtype=None):
+    """A model by role ("teacher" or "student") or from a local directory saved by training."""
+    if checkpoint in ("teacher", "student"):
+        return load_model(cfg, checkpoint, dtype=dtype)
+    if not Path(checkpoint).is_dir():
+        raise FileNotFoundError(f"no saved model at {checkpoint}")
+    from transformers import AutoModelForCausalLM
+
+    return AutoModelForCausalLM.from_pretrained(checkpoint, dtype=dtype)

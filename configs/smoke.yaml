@@ -4,6 +4,7 @@ device: cpu
 data:
   corpus_dir: data/corpus/smoke
   cache_dir: cache/smoke
+  experiments_dir: experiments/smoke
 corpus:
   token_budget: 50_000
 eval:

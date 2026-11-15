@@ -7,6 +7,7 @@ data:
   templates_dir: data/templates
   corpus_dir: data/corpus
   cache_dir: cache
+  experiments_dir: experiments
 
 teacher: EleutherAI/pythia-410m
 teacher_revision: 9879c9b5f8bea9051dcb0e68dff21493d67e9d4f
@@ -45,3 +46,9 @@ loop:
 eval:
   split: dev
   perplexity_tokens: 200_000
+
+benchmarks:
+  crows_pairs:                   # CC BY-SA 4.0; evaluation only; kept in a gitignored folder
+    path: data/benchmarks/crows_pairs_anonymized.csv
+    url: https://raw.githubusercontent.com/nyu-mll/crows-pairs/8aaac11c485473159ec9328a65253a5be9a479dc/data/crows_pairs_anonymized.csv
+    sha256: dfb36986ce0502abbaf7055b9176da3d08d48e07df1251991b5dfbcbceab9d0c

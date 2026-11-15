@@ -25,6 +25,8 @@ MODULES = [
     "debias_distill.measure.capability",
     "debias_distill.measure.benchmarks",
     "debias_distill.measure.probe",
+    "debias_distill.measure.evaluate",
+    "debias_distill.measure.compare",
     "debias_distill.loop.hotspots",
     "debias_distill.loop.reweight",
     "debias_distill.loop.run_loop",
