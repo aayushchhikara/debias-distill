@@ -34,8 +34,8 @@ distill:
   lr: 1.0e-4
   batch_size: 8
   grad_accum: 4                  # optimizer step every batch_size x grad_accum rows
-  steps: 471                     # optimizer steps, the same for every arm (one pass over the originals)
-  warmup_steps: 24
+  steps: 942                     # optimizer steps, the same for every arm (two passes over the originals)
+  warmup_steps: 47               # 5% of the steps
   weight_decay: 0.01
   max_grad_norm: 1.0
   checkpoint_every: 50           # optimizer steps between resumable checkpoints
