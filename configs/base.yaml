@@ -31,7 +31,7 @@ distill:
   arm: A                         # label used in run names
   data: originals                # originals | both (originals and their swapped copies)
   target: plain                  # plain | mean | aligned | hard (next-token labels, no teacher)
-  lr: 1.0e-4
+  lr: 3.0e-5                     # chosen on dev perplexity (sweep 1e-5 to 3e-4, 471 steps, seed 1)
   batch_size: 8
   grad_accum: 4                  # optimizer step every batch_size x grad_accum rows
   steps: 942                     # optimizer steps, the same for every arm (two passes over the originals)
